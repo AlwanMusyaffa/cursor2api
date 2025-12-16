@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"cursor2api/internal/browser"
+	"cursor2api/internal/config"
 	"cursor2api/internal/tools"
 
 	"github.com/gin-gonic/gin"
@@ -63,13 +64,11 @@ type Usage struct {
 var (
 	toolExecutor *tools.Executor
 	toolParser   *tools.Parser
-	intentParser *tools.IntentParser
 )
 
 func init() {
 	toolExecutor = tools.NewExecutor()
 	toolParser = tools.NewParser()
-	intentParser = tools.NewIntentParser()
 }
 
 // CursorSSEEvent Cursor SSE 事件格式
@@ -364,8 +363,9 @@ func handleStream(c *gin.Context, cursorReq browser.CursorChatRequest, model str
 	responseText := fullResponse.String()
 	toolCalls, _ := toolParser.ParseToolCalls(responseText)
 
-	// 如果没有工具调用，检查是否是拒绝响应，自动执行
-	if len(toolCalls) == 0 && tools.DetectRefusal(responseText) {
+	// 如果没有工具调用，检查是否是拒绝响应，自动执行（需要配置开启）
+	cfg := config.Get()
+	if len(toolCalls) == 0 && cfg.Browser.AutoExecute && tools.DetectRefusal(responseText) {
 		if cmd := tools.ExtractCommandFromRefusal(responseText); cmd != "" {
 			// 自动执行提取的命令
 			output, execErr := toolExecutor.Execute("bash", map[string]interface{}{
@@ -517,8 +517,9 @@ func parseResponseToBlocks(text string, userMessages []string) []ContentBlock {
 	// 检测工具调用
 	toolCalls, remainingText := toolParser.ParseToolCalls(text)
 
-	// 如果没有工具调用，检查是否是拒绝响应
-	if len(toolCalls) == 0 && tools.DetectRefusal(text) {
+	// 如果没有工具调用，检查是否是拒绝响应（需要配置开启）
+	cfg := config.Get()
+	if len(toolCalls) == 0 && cfg.Browser.AutoExecute && tools.DetectRefusal(text) {
 		// 尝试从拒绝响应中提取命令并自动执行
 		if cmd := tools.ExtractCommandFromRefusal(text); cmd != "" {
 			// 自动执行提取的命令
