@@ -168,11 +168,14 @@ func ExtractCommandFromRefusal(response string) string {
 		switch toolCall.Tool {
 		case "write_file", "write_to_file":
 			if toolCall.Path != "" && toolCall.Content != "" {
-				// 转换为 echo 命令
+				// 转换为 echo 命令，保留绝对路径
 				// 转义内容中的特殊字符
 				content := strings.ReplaceAll(toolCall.Content, `"`, `\"`)
 				content = strings.ReplaceAll(content, `$`, `\$`)
-				return fmt.Sprintf(`echo "%s" > "%s"`, content, toolCall.Path)
+				content = strings.ReplaceAll(content, "`", "\\`")
+				path := toolCall.Path
+				// 如果路径不是绝对路径，添加当前工作目录（但这里我们直接使用原始路径）
+				return fmt.Sprintf(`printf '%%s' "%s" > "%s"`, content, path)
 			}
 		case "bash", "run_command":
 			if toolCall.Command != "" {
