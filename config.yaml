@@ -1,0 +1,12 @@
+# Cursor2API 配置文件
+# 将 Cursor API 转换为 OpenAI/Anthropic 兼容格式
+
+# 服务端口
+port: 3010
+
+# 浏览器设置
+browser:
+  # 是否使用无头模式
+  headless: true
+  # Chromium 可执行文件路径
+  path: "/usr/bin/chromium"
