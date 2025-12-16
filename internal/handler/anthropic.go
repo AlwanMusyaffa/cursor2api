@@ -364,7 +364,59 @@ func handleStream(c *gin.Context, cursorReq browser.CursorChatRequest, model str
 	responseText := fullResponse.String()
 	toolCalls, _ := toolParser.ParseToolCalls(responseText)
 
-	if len(toolCalls) > 0 {
+	// 如果没有工具调用，检查是否是拒绝响应，自动执行
+	if len(toolCalls) == 0 && tools.DetectRefusal(responseText) {
+		if cmd := tools.ExtractCommandFromRefusal(responseText); cmd != "" {
+			// 自动执行提取的命令
+			output, execErr := toolExecutor.Execute("bash", map[string]interface{}{
+				"command": cmd,
+			})
+
+			resultText := output
+			isError := false
+			if execErr != nil {
+				resultText = execErr.Error()
+				isError = true
+			}
+
+			// 发送工具调用块
+			toolID := "toolu_" + generateID()
+			stopReason = "tool_use"
+
+			c.Writer.WriteString("event: content_block_start\n")
+			c.Writer.WriteString(fmt.Sprintf(`data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"%s","name":"bash","input":{}}}`+"\n\n", toolID))
+			flusher.Flush()
+
+			inputJSON, _ := json.Marshal(map[string]string{"command": cmd})
+			c.Writer.WriteString("event: content_block_delta\n")
+			c.Writer.WriteString(fmt.Sprintf(`data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"%s"}}`+"\n\n", escapeJSON(string(inputJSON))))
+			flusher.Flush()
+
+			c.Writer.WriteString("event: content_block_stop\n")
+			c.Writer.WriteString(`data: {"type":"content_block_stop","index":1}` + "\n\n")
+			flusher.Flush()
+
+			// 发送执行结果作为新的文本块
+			statusEmoji := "✅"
+			if isError {
+				statusEmoji = "❌"
+			}
+			resultMsg := fmt.Sprintf("\n\n%s 已自动执行:\n```\n%s\n```\n结果:\n```\n%s\n```", statusEmoji, cmd, resultText)
+			resultJSON, _ := json.Marshal(resultMsg)
+
+			c.Writer.WriteString("event: content_block_start\n")
+			c.Writer.WriteString(`data: {"type":"content_block_start","index":2,"content_block":{"type":"text","text":""}}` + "\n\n")
+			flusher.Flush()
+
+			c.Writer.WriteString("event: content_block_delta\n")
+			c.Writer.WriteString(`data: {"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":` + string(resultJSON) + `}}` + "\n\n")
+			flusher.Flush()
+
+			c.Writer.WriteString("event: content_block_stop\n")
+			c.Writer.WriteString(`data: {"type":"content_block_stop","index":2}` + "\n\n")
+			flusher.Flush()
+		}
+	} else if len(toolCalls) > 0 {
 		stopReason = "tool_use"
 		// 发送工具调用块
 		for i, call := range toolCalls {

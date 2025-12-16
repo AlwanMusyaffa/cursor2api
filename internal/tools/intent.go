@@ -136,19 +136,36 @@ func DetectRefusal(response string) bool {
 // ExtractCommandFromRefusal 从拒绝响应中提取建议的命令
 func ExtractCommandFromRefusal(response string) string {
 	// 匹配代码块中的命令
-	codeBlockRe := regexp.MustCompile("```(?:bash|sh)?\\s*\\n([^`]+)\\n```")
+	codeBlockRe := regexp.MustCompile("```(?:bash|sh)?\\s*\\n?([^`]+)\\n?```")
 	if matches := codeBlockRe.FindStringSubmatch(response); len(matches) > 1 {
-		return strings.TrimSpace(matches[1])
+		cmd := strings.TrimSpace(matches[1])
+		if cmd != "" {
+			return cmd
+		}
 	}
 
-	// 匹配单行命令
+	// 匹配常见命令模式（每行检查）
+	lines := strings.Split(response, "\n")
 	cmdPatterns := []*regexp.Regexp{
-		regexp.MustCompile(`(?m)^\s*(cat|echo|mkdir|touch|rm|cp|mv|ls|cd|pwd)\s+.+$`),
-		regexp.MustCompile(`(?m)^\s*(\S+)\s+>\s+\S+`),
+		// echo "xxx" > file
+		regexp.MustCompile(`^\s*(echo\s+.+\s*>\s*\S+)`),
+		// cat > file << 'EOF' 或 cat > file
+		regexp.MustCompile(`^\s*(cat\s+.+\s*>\s*\S+)`),
+		// 常见命令开头
+		regexp.MustCompile(`^\s*((?:echo|cat|mkdir|touch|rm|cp|mv|ls|pwd|cd|chmod|chown)\s+.+)$`),
+		// 任何 > 重定向
+		regexp.MustCompile(`^\s*(\S+\s+["'][^"']+["']\s*>\s*\S+)`),
 	}
-	for _, re := range cmdPatterns {
-		if matches := re.FindString(response); matches != "" {
-			return strings.TrimSpace(matches)
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		for _, re := range cmdPatterns {
+			if matches := re.FindStringSubmatch(line); len(matches) > 1 {
+				return strings.TrimSpace(matches[1])
+			}
 		}
 	}
 
