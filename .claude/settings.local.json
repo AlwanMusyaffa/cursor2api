@@ -1,6 +1,8 @@
 {
-  "enabledMcpjsonServers": [
-    "cursor2api"
-  ],
-  "enableAllProjectMcpServers": true
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(tree:*)"
+    ]
+  }
 }

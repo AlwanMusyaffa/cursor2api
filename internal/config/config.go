@@ -24,8 +24,6 @@ type BrowserConfig struct {
 	Headless bool `yaml:"headless"`
 	// Path Chromium 可执行文件路径，留空则自动下载
 	Path string `yaml:"path"`
-	// AutoExecute 当 AI 拒绝执行时自动提取并执行命令
-	AutoExecute bool `yaml:"auto_execute"`
 }
 
 var (
@@ -39,9 +37,8 @@ func Get() *Config {
 		cfg = &Config{
 			Port: "3010",
 			Browser: BrowserConfig{
-				Headless:    true,
-				Path:        "",   // 留空表示自动检测或下载
-				AutoExecute: true, // 默认开启自动执行
+				Headless: true,
+				Path:     "", // 留空表示自动检测或下载
 			},
 		}
 		load(cfg)
@@ -105,9 +102,6 @@ func load(c *Config) {
 	}
 	if browserPath := os.Getenv("BROWSER_PATH"); browserPath != "" {
 		c.Browser.Path = browserPath
-	}
-	if autoExec := os.Getenv("AUTO_EXECUTE"); autoExec != "" {
-		c.Browser.AutoExecute = autoExec == "true" || autoExec == "1"
 	}
 
 	// 如果浏览器路径未指定，尝试自动检测

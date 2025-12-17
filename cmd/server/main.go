@@ -38,10 +38,6 @@ func main() {
 	r.POST("/v1/messages/count_tokens", handler.CountTokens)
 	r.POST("/messages/count_tokens", handler.CountTokens)
 
-	// 工具相关接口
-	r.GET("/tools", handler.ListTools)
-	r.POST("/tools/execute", handler.ExecuteTool)
-
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})

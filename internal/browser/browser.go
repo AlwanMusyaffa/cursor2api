@@ -5,6 +5,7 @@ package browser
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"sync"
 	"time"
@@ -17,13 +18,21 @@ import (
 	"github.com/ysmood/gson"
 )
 
+const (
+	cursorDocsURL = "https://cursor.com/cn/docs"
+	cursorChatAPI = "https://cursor.com/api/chat"
+	userAgent     = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+	poolSize      = 3 // 页面池大小
+)
+
 // Service 浏览器服务，管理浏览器实例和请求
 type Service struct {
-	browser   *rod.Browser // 浏览器实例
-	page      *rod.Page    // 当前页面
-	xIsHuman  string       // X-Is-Human token
-	mu        sync.RWMutex // 读写锁
-	lastFetch time.Time    // 上次获取 token 时间
+	browser   *rod.Browser   // 浏览器实例
+	page      *rod.Page      // 当前页面（用于 token 刷新）
+	pagePool  chan *rod.Page // 预热页面池
+	xIsHuman  string         // X-Is-Human token
+	mu        sync.RWMutex   // 读写锁
+	lastFetch time.Time      // 上次获取 token 时间
 }
 
 var (
@@ -66,8 +75,55 @@ func (s *Service) init() {
 	}
 
 	u := l.MustLaunch()
-
 	s.browser = rod.New().ControlURL(u).MustConnect()
+
+	// 初始化页面池
+	s.pagePool = make(chan *rod.Page, poolSize)
+	go s.warmupPages()
+}
+
+// warmupPages 预热页面池
+func (s *Service) warmupPages() {
+	for i := 0; i < poolSize; i++ {
+		if page := s.createReadyPage(); page != nil {
+			s.pagePool <- page
+		}
+	}
+	log.Printf("[浏览器] 页面池预热完成，共 %d 个页面", len(s.pagePool))
+}
+
+// createReadyPage 创建一个已导航完成的页面
+func (s *Service) createReadyPage() *rod.Page {
+	page := s.browser.MustPage()
+	page.MustSetUserAgent(&proto.NetworkSetUserAgentOverride{UserAgent: userAgent})
+	page.MustEvalOnNewDocument(`Object.defineProperty(navigator, 'webdriver', {get: () => false})`)
+	if err := page.Navigate(cursorDocsURL); err != nil {
+		page.Close()
+		return nil
+	}
+	page.MustWaitLoad()
+	return page
+}
+
+// getPage 从池中获取页面，如果池空则创建新页面
+func (s *Service) getPage() *rod.Page {
+	select {
+	case page := <-s.pagePool:
+		return page
+	default:
+		return s.createReadyPage()
+	}
+}
+
+// recyclePage 回收页面到池中，或关闭
+func (s *Service) recyclePage(page *rod.Page) {
+	select {
+	case s.pagePool <- page:
+		// 成功放回池中
+	default:
+		// 池满，关闭页面
+		page.Close()
+	}
 }
 
 // RefreshToken 刷新 X-Is-Human token
@@ -81,13 +137,7 @@ func (s *Service) RefreshToken() error {
 	}
 
 	s.page = s.browser.MustPage()
-
-	// 设置 User-Agent
-	s.page.MustSetUserAgent(&proto.NetworkSetUserAgentOverride{
-		UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-	})
-
-	// 隐藏 webdriver 特征
+	s.page.MustSetUserAgent(&proto.NetworkSetUserAgentOverride{UserAgent: userAgent})
 	s.page.MustEvalOnNewDocument(`Object.defineProperty(navigator, 'webdriver', {get: () => false})`)
 
 	// 监听请求，捕获 token
@@ -105,30 +155,26 @@ func (s *Service) RefreshToken() error {
 	go router.Run()
 
 	// 访问 Cursor 文档页面
-	if err := s.page.Navigate("https://cursor.com/cn/docs"); err != nil {
+	if err := s.page.Navigate(cursorDocsURL); err != nil {
 		router.Stop()
 		return fmt.Errorf("导航失败: %w", err)
 	}
 
 	s.page.MustWaitLoad()
-	time.Sleep(5 * time.Second)
+	time.Sleep(3 * time.Second) // 减少等待时间
 
 	// 尝试触发聊天请求
-	askBtn, err := s.page.Timeout(10 * time.Second).Element(`button:has-text("询问"), button:has-text("Ask"), [data-testid="ask-ai"]`)
-	if err != nil {
-		askBtn, err = s.page.Timeout(5 * time.Second).Element(`textarea, input[type="text"]`)
-	}
-
+	askBtn, _ := s.page.Timeout(5 * time.Second).Element(`button:has-text("询问"), button:has-text("Ask"), [data-testid="ask-ai"], textarea, input[type="text"]`)
 	if askBtn != nil {
 		askBtn.Click(proto.InputMouseButtonLeft, 1)
-		time.Sleep(1 * time.Second)
-		askBtn.Input("hi")
 		time.Sleep(500 * time.Millisecond)
+		askBtn.Input("hi")
+		time.Sleep(300 * time.Millisecond)
 		s.page.Keyboard.Press(13)
 	}
 
 	// 等待请求被捕获
-	time.Sleep(8 * time.Second)
+	time.Sleep(5 * time.Second)
 	router.Stop()
 
 	if capturedToken != "" {
@@ -154,11 +200,12 @@ func (s *Service) GetXIsHuman() string {
 
 // CursorChatRequest Cursor API 请求格式
 type CursorChatRequest struct {
-	Context  []CursorContext `json:"context"`
+	Context  []CursorContext `json:"context,omitempty"`
 	Model    string          `json:"model"`
 	ID       string          `json:"id"`
 	Messages []CursorMessage `json:"messages"`
 	Trigger  string          `json:"trigger"`
+	Tools    interface{}     `json:"tools,omitempty"` // 尝试透传工具定义
 }
 
 // CursorContext 上下文信息
@@ -187,25 +234,19 @@ func (s *Service) SendRequest(req CursorChatRequest) (string, error) {
 		return "", fmt.Errorf("浏览器未初始化")
 	}
 
-	// 创建新页面
-	page := s.browser.MustPage()
-	defer page.Close()
-
-	// 设置浏览器特征
-	page.MustSetUserAgent(&proto.NetworkSetUserAgentOverride{
-		UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-	})
-	page.MustEvalOnNewDocument(`Object.defineProperty(navigator, 'webdriver', {get: () => false})`)
-
-	// 导航到 Cursor
-	page.MustNavigate("https://cursor.com/cn/docs").MustWaitLoad()
+	// 从池中获取预热页面
+	page := s.getPage()
+	if page == nil {
+		return "", fmt.Errorf("无法获取页面")
+	}
+	defer s.recyclePage(page)
 
 	reqJSON, _ := json.Marshal(req)
 
 	// 使用 JavaScript 发送请求
 	script := fmt.Sprintf(`() => {
 		return new Promise((resolve, reject) => {
-			fetch('https://cursor.com/api/chat', {
+			fetch('%s', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(%s)
@@ -219,7 +260,7 @@ func (s *Service) SendRequest(req CursorChatRequest) (string, error) {
 			.then(text => resolve(text))
 			.catch(err => reject(err));
 		});
-	}`, string(reqJSON))
+	}`, cursorChatAPI, string(reqJSON))
 
 	result, err := page.Timeout(90 * time.Second).Evaluate(rod.Eval(script).ByPromise())
 	if err != nil {
@@ -235,40 +276,36 @@ func (s *Service) SendStreamRequest(req CursorChatRequest, onChunk func(chunk st
 		return fmt.Errorf("浏览器未初始化")
 	}
 
-	// 创建新页面
+	// 流式请求需要新页面（因为需要暴露回调函数）
 	page := s.browser.MustPage()
 	defer page.Close()
 
-	// 设置浏览器特征
-	page.MustSetUserAgent(&proto.NetworkSetUserAgentOverride{
-		UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-	})
+	page.MustSetUserAgent(&proto.NetworkSetUserAgentOverride{UserAgent: userAgent})
 	page.MustEvalOnNewDocument(`Object.defineProperty(navigator, 'webdriver', {get: () => false})`)
 
 	// 暴露回调函数给 JavaScript
 	done := make(chan error, 1)
 	page.MustExpose("goStreamCallback", func(j gson.JSON) (interface{}, error) {
 		onChunk(j.String())
-		return "ok", nil
+		return nil, nil
 	})
 	page.MustExpose("goStreamDone", func(j gson.JSON) (interface{}, error) {
-		errMsg := j.String()
-		if errMsg != "" {
+		if errMsg := j.String(); errMsg != "" {
 			done <- fmt.Errorf("%s", errMsg)
 		} else {
 			done <- nil
 		}
-		return "ok", nil
+		return nil, nil
 	})
 
 	// 导航到 Cursor
-	page.MustNavigate("https://cursor.com/cn/docs").MustWaitLoad()
+	page.MustNavigate(cursorDocsURL).MustWaitLoad()
 
 	reqJSON, _ := json.Marshal(req)
 
 	// 使用 JavaScript 发送流式请求
 	script := fmt.Sprintf(`() => {
-		fetch('https://cursor.com/api/chat', {
+		fetch('%s', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(%s)
@@ -289,19 +326,14 @@ func (s *Service) SendStreamRequest(req CursorChatRequest, onChunk func(chunk st
 						window.goStreamDone("");
 						return;
 					}
-					const chunk = decoder.decode(value, {stream: true});
-					window.goStreamCallback(chunk);
+					window.goStreamCallback(decoder.decode(value, {stream: true}));
 					read();
-				}).catch(err => {
-					window.goStreamDone(err.message);
-				});
+				}).catch(err => window.goStreamDone(err.message));
 			}
 			read();
 		})
-		.catch(err => {
-			window.goStreamDone(err.message);
-		});
-	}`, string(reqJSON))
+		.catch(err => window.goStreamDone(err.message));
+	}`, cursorChatAPI, string(reqJSON))
 
 	if _, err := page.Evaluate(rod.Eval(script)); err != nil {
 		return fmt.Errorf("执行失败: %w", err)
@@ -311,7 +343,7 @@ func (s *Service) SendStreamRequest(req CursorChatRequest, onChunk func(chunk st
 	select {
 	case err := <-done:
 		return err
-	case <-time.After(90 * time.Second):
+	case <-time.After(120 * time.Second):
 		return fmt.Errorf("请求超时")
 	}
 }
